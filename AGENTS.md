@@ -124,3 +124,44 @@ python3 bootstrap.py
 
 Do not include private machine instructions in this tracked file. Use a
 git-ignored local note for personal workflow details.
+
+## Cursor Cloud specific instructions
+
+This section is durable guidance for cloud agents. The startup update script
+already installs Python dev deps into `.venv` (via `./scripts/test.sh`) and the
+ESLint dev dep (via `npm install`), so you do not need to reinstall them.
+
+- **hermes-agent is NOT installed in this environment, and no provider API keys
+  are set.** This is expected and supported: the WebUI server boots and serves
+  the full UI "agent-free", and the pytest suite, lint gates, and page-load
+  smoke all run without the agent or credentials. What you cannot exercise here
+  is *live chat* and the agent-backed panels (Tasks/Skills/Memory that read real
+  agent state) — sending a chat message returns "AIAgent not available". A small
+  number of agent-dependent tests skip for this reason. To enable live chat you
+  would need hermes-agent on `sys.path` (set `HERMES_WEBUI_AGENT_DIR`) plus a
+  model provider key in `~/.hermes/.env`.
+
+- **Run the dev server agent-free** with isolated state (never point it at a real
+  `~/.hermes`). Use the repo `.venv` Python:
+
+  ```bash
+  HERMES_WEBUI_PORT=8787 HERMES_WEBUI_HOST=127.0.0.1 \
+  HERMES_HOME=/tmp/hermes-demo-home HERMES_WEBUI_STATE_DIR=/tmp/hermes-demo-state \
+  HERMES_WEBUI_DEFAULT_WORKSPACE=/tmp/hermes-demo-workspace \
+  HERMES_WEBUI_SKIP_ONBOARDING=1 \
+  HERMES_WEBUI_AGENT_DIR=/tmp/hermes-demo-home/no-agent \
+  .venv/bin/python server.py
+  ```
+
+  Then check `curl http://127.0.0.1:8787/health` (returns `{"status":"ok",...}`).
+  Core features that work agent-free: session create/rename/delete, the
+  workspace file browser (preview/create/edit/save), themes, and settings.
+  `tests/browser_smoke.py` boots this same agent-free server for a headless
+  page-load gate (needs `playwright` + chromium, which are not preinstalled).
+
+- **Tests/lint** (details in `TESTING.md`): run tests through `./scripts/test.sh`
+  (creates/uses `.venv`, pins Python 3.11–3.13). **Gotcha:** invoking it with no
+  args runs the entire suite (~13.9k tests, ~11 min); pass a path/args for
+  focused runs, e.g. `./scripts/test.sh tests/test_regressions.py -q`. Lint gates
+  are the ruff diff gate `python3 scripts/ruff_lint.py --diff origin/master` and
+  the ESLint runtime guard `npm run lint:runtime` — neither reformats the tree.
